@@ -147,7 +147,6 @@ begin
 
     -- ROW LEVEL SECURITY : sans politique qui l'autorise, aucune ligne n'est visible.
     execute format('alter table public.%I enable row level security', t);
-    execute format('alter table public.%I force row level security', t);
 
     -- Chaque ligne n'est lisible et modifiable que par son propriétaire.
     execute format(

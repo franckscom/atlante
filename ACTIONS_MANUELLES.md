@@ -62,6 +62,13 @@ Ma session ne pouvait pas joindre Supabase (réseau fermé). Le SQL a été test
 - [ ] **D6. Sauvegarde et restauration.** « Sauvegarde et exports » : crée la clé de secours, **imprime-la**, fais une sauvegarde. Puis teste la restauration du fichier avec le mot de passe (l'aperçu doit annoncer tout « identique »), et une fois avec la clé de secours.
 - [ ] **D7. Suppression de compte (facultatif, destructif).** À ne tester que si tu acceptes de refaire C1 à C4 : il faut rouvrir les inscriptions pour recréer le compte. Fais une sauvegarde avant.
 
+### Si D1 échoue
+
+- Indicateur « Erreur », détail « permission denied » ou « relation does not exist » : la migration A1 n'a pas été exécutée en entier. Relance A2.
+- Détail « schema must be one of… » ou erreur 404 sur `/rest/v1/` : dans Supabase, « Project Settings », « Data API », vérifie que l'API est activée et que le schéma `public` est exposé.
+- « Serveur en pause ou injoignable » alors que le projet est actif : vérifie l'URL du projet dans `src/config.ts`.
+- Dans tous les cas : « Réglages », « Synchronisation », « Détail technique », et envoie-moi le message affiché.
+
 ## E. iPhone
 
 - [ ] **E1. Installer.** Safari, https://franckscom.github.io/atlante/, bouton Partager, « Sur l'écran d'accueil ». Ouvre l'app depuis l'icône et connecte-toi (l'app installée a son propre stockage, distinct de Safari).
