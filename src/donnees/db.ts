@@ -72,8 +72,11 @@ export function nouvelleLigne() {
 export async function semerSiPremierLancement(base: BaseAtlante): Promise<void> {
   await base.transaction('rw', base.meta, base.domaines, base.types_relation, async () => {
     if (await lireMeta(base, 'seme', false)) return;
-    for (const nom of DOMAINES_DE_DEPART) {
-      await base.domaines.add({ ...nouvelleLigne(), nom, description: '' });
+    // Dates de création décalées d'une milliseconde : l'ordre de la liste de départ est conservé à l'affichage.
+    const depart = Date.now();
+    const date = (i: number) => new Date(depart + i).toISOString();
+    for (const [i, nom] of DOMAINES_DE_DEPART.entries()) {
+      await base.domaines.add({ ...nouvelleLigne(), created_at: date(i), updated_at: date(i), nom, description: '' });
     }
     for (const [nom, nom_inverse] of TYPES_RELATION_DE_DEPART) {
       await base.types_relation.add({ ...nouvelleLigne(), nom, nom_inverse });

@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:navigateur": "node tests-navigateur/parcours.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

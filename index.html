@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Atlante : base de connaissance personnelle, privée et hors ligne." />
+    <meta name="theme-color" content="#1f3a5f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Atlante" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Les moteurs de recherche n'ont rien à indexer ici. -->
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="icone.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <title>Atlante</title>
+    <script>
+      // Applique le thème choisi avant le premier affichage, pour éviter un flash de couleur.
+      try {
+        var t = localStorage.getItem('atlante-theme');
+        if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="racine"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

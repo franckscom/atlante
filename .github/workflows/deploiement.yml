@@ -1,0 +1,52 @@
+# À chaque envoi de code : tests puis construction de l'app.
+# Sur la branche main uniquement : publication sur GitHub Pages.
+# Dépôt public : GitHub Actions est gratuit et sans limite de minutes pour les exécuteurs standards.
+name: Tests et déploiement
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    name: Tests et construction
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installer les dépendances (versions exactes du fichier package-lock.json)
+        run: npm ci
+      - name: Tests automatiques
+        run: npm test
+      - name: Construire l'app
+        run: npm run build
+      - name: Préparer le site pour GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  publier:
+    name: Publication sur GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: construire
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v5
