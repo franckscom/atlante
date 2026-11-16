@@ -59,7 +59,7 @@ La session de connexion est gardée dans le stockage local du navigateur, pas da
 
 **Action manuelle :** ouvre ces deux pages, lis le DPA, et vérifie comment il s'applique à ton compte. Les sources que j'ai consultées ne s'accordent pas : d'anciennes versions devaient être signées et renvoyées, la version actuelle s'appliquerait par l'acceptation des conditions d'utilisation. Je n'ai pas pu ouvrir le site de Supabase depuis ma session pour trancher, ni confirmer que le plan gratuit est couvert. Si le tableau de bord propose de signer le DPA, signe-le et garde le PDF daté. Sinon, pose la question au support et garde la réponse.
 
-Date d'acceptation ou de signature du DPA : ____________ (à compléter)
+Date d'acceptation ou de signature du DPA : DPA Supabase : intégré aux conditions d’utilisation, accepté à la création du compte le 16.11.26 (supabase.com/legal/dpa, consulté le 16.11.26). Le texte ne précise pas les niveaux d’offre : il semble couvrir le plan gratuit, sans le dire explicitement. Contact confidentialité : privacy@supabase.io.
 
 **Ce qu'il couvre.**
 - L'engagement de Supabase sur la sécurité et la confidentialité.
