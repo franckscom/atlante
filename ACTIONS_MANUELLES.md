@@ -64,7 +64,7 @@ Ma session ne pouvait pas joindre Supabase (réseau fermé). Le SQL a été test
 
 ### Si D1 échoue
 
-- Indicateur « Erreur », détail « permission denied » ou « relation does not exist » : la migration A1 n'a pas été exécutée en entier. Relance A2.
+- Indicateur « Erreur », détail « permission denied » ou « relation does not exist » : la migration A1 n'a pas été exécutée, ou pas en entier. Refais A1, puis A2.
 - Détail « schema must be one of… » ou erreur 404 sur `/rest/v1/` : dans Supabase, « Project Settings », « Data API », vérifie que l'API est activée et que le schéma `public` est exposé.
 - « Serveur en pause ou injoignable » alors que le projet est actif : vérifie l'URL du projet dans `src/config.ts`.
 - Dans tous les cas : « Réglages », « Synchronisation », « Détail technique », et envoie-moi le message affiché.
