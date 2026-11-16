@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dev-dist/
+*.local
+.env
+.env.*
+# Jamais de sauvegardes ni d'exports de données dans le dépôt
+*.atlante
+*.zip
+.DS_Store
