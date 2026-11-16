@@ -38,7 +38,7 @@ Tableau de bord : https://supabase.com/dashboard/project/sixqffwcfapinsdzfbxh
 
 ## C. Compte
 
-- [ ] **C1. Créer ton compte.** Dans l'app : « Réglages », « Créer un compte », e-mail et mot de passe (10 caractères au moins). Password et login : toujours toi.
+- [ ] **C1. Créer ton compte.** Dans l'app : « Réglages », « Créer un compte », e-mail et mot de passe (10 caractères au moins). Mot de passe et connexion : toujours toi.
 - [ ] **C2. Confirmer l'e-mail.** Clique sur le lien reçu. Il ramène à l'app. Le serveur d'e-mails intégré de Supabase est limité à quelques messages par heure : si rien n'arrive, regarde les indésirables avant de recommencer.
 - [ ] **C3. Se connecter.** « Réglages », e-mail et mot de passe. L'indicateur en haut à droite passe à « Synchronisé ».
 - [ ] **C4. Désactiver les inscriptions.** Supabase, « Authentication », « Sign In / Providers », désactive « Allow new users to sign up », « Save ». À faire après C3, pas avant.
