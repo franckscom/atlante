@@ -28,6 +28,8 @@ const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
     let modeServeur = 'ok';
     let rev = 0;
     const recues = [];
+    const effacees = [];
+    const lignes = new Map();
     await contexte.route('**/*.supabase.co/**', async (route) => {
       const req = route.request();
       const url = req.url();
@@ -39,11 +41,27 @@ const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
       if (url.includes('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
       if (url.includes('/rest/v1/')) {
         if (modeServeur === 'pause') return route.fulfill({ status: 540, json: { message: 'Project paused' } });
-        if (req.method() === 'GET') return route.fulfill({ json: [] });
+        const table = url.split('/rest/v1/')[1].split('?')[0];
+        const idsUrl = decodeURIComponent(url.split('?')[1] || '').match(/[0-9a-f]{8}-[0-9a-f-]{27}/g) || [];
+        if (req.method() === 'GET') {
+          // « Quels identifiants existent encore ? » : on répond d'après ce que le faux serveur a reçu. Sinon : rien de nouveau.
+          return route.fulfill({ json: url.includes('id=in.') ? idsUrl.filter((id) => lignes.has(id)).map((id) => ({ id })) : [] });
+        }
         if (req.method() === 'POST') {
           const ligne = { ...JSON.parse(req.postData()), owner_id: 'u-test', rev: ++rev };
-          recues.push(url.split('/rest/v1/')[1].split('?')[0]);
+          lignes.set(ligne.id, ligne);
+          recues.push(table);
           return route.fulfill({ status: 201, json: ligne });
+        }
+        if (req.method() === 'PATCH') {
+          const ligne = { ...lignes.get(idsUrl[0]), ...JSON.parse(req.postData()), id: idsUrl[0], owner_id: 'u-test', rev: ++rev };
+          lignes.set(ligne.id, ligne);
+          return route.fulfill({ json: [ligne] });
+        }
+        if (req.method() === 'DELETE') {
+          for (const id of idsUrl) lignes.delete(id);
+          effacees.push(...idsUrl);
+          return route.fulfill({ json: idsUrl.map((id) => ({ id })) });
         }
       }
       return route.fulfill({ status: 404, json: {} });
@@ -250,6 +268,38 @@ const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
     await page.getByRole('link', { name: 'idee' }).click();
     await page.getByText('Fichier importé : idee.txt').waitFor();
     ok(true, 'import : fiche créée avec provenance');
+
+    console.log('Vider la corbeille');
+    await page.goto(URL_APP + '#/fiches?q=idee');
+    await page.getByRole('link', { name: 'idee' }).click();
+    await page.locator('article > .actions button.danger').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Supprimer' }).click();
+    await page.getByRole('heading', { name: 'Fiches', level: 1 }).waitFor();
+    await page.goto(URL_APP + '#/reglages');
+    await page.getByLabel('Adresse e-mail').fill('test@exemple.fr');
+    await page.getByLabel('Mot de passe', { exact: true }).fill('mot-de-passe-de-test');
+    await page.getByRole('button', { name: 'Se connecter' }).click();
+    await page.locator('header .synchro.ok').waitFor({ timeout: 15000 });
+    const corbeille = page.locator('section', { hasText: 'Corbeille' });
+    await corbeille.getByText('idee').waitFor();
+    await corbeille.getByRole('button', { name: 'Vider la corbeille…' }).click();
+    await corbeille.getByText('Étape 1 sur 2').waitFor();
+    ok(await corbeille.getByRole('link', { name: 'Aller à Sauvegarde et exports' }).isVisible(), 'vider la corbeille : export proposé avant');
+    await corbeille.getByRole('button', { name: 'Continuer sans exporter' }).click();
+    const boutonVider = corbeille.getByRole('button', { name: 'Vider définitivement la corbeille' });
+    ok(await boutonVider.isDisabled(), 'vider la corbeille : seconde confirmation exigée');
+    await corbeille.getByLabel('Écris VIDER en majuscules').fill('VIDER');
+    await boutonVider.click();
+    await corbeille.getByText('définitivement du serveur et de cet appareil').waitFor();
+    await corbeille.getByText('La corbeille est vide.').waitFor();
+    const restes = await page.evaluate(() => new Promise((res) => {
+      const o = indexedDB.open('atlante');
+      o.onsuccess = () => { const r = o.result.transaction('fiches').objectStore('fiches').getAll(); r.onsuccess = () => res(r.result.filter((f) => f.deleted_at || f.titre === 'idee').length); };
+    }));
+    ok(restes === 0 && effacees.length > 0, 'corbeille vidée : lignes effacées de la base locale et demande d\'effacement envoyée au serveur');
+    await page.goto(URL_APP + '#/fiches');
+    await page.getByRole('link', { name: 'Cahiers de prison' }).first().waitFor();
+    ok(true, 'les fiches vivantes sont toujours là');
 
     console.log('Téléphone et mode sombre');
     const mobile = await navigateur.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', storageState: await contexte.storageState() });

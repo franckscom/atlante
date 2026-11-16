@@ -61,4 +61,26 @@ export class DistantSupabase implements Distant {
     const lignes = (r.data ?? []) as LigneDistante[];
     return normaliserDates(lignes[0] ?? null);
   }
+
+  async idsExistants(table: NomTable, ids: string[]): Promise<string[]> {
+    const trouves: string[] = [];
+    // Par paquets de 100 : les identifiants voyagent dans l'adresse de la requête, qui a une longueur limitée.
+    for (let i = 0; i < ids.length; i += 100) {
+      const r = await this.client.from(table).select('id').in('id', ids.slice(i, i + 100));
+      verifier(r);
+      trouves.push(...((r.data ?? []) as { id: string }[]).map((l) => l.id));
+    }
+    return trouves;
+  }
+
+  async effacerDefinitivement(table: NomTable, ids: string[]): Promise<string[]> {
+    const effaces: string[] = [];
+    for (let i = 0; i < ids.length; i += 100) {
+      // Le filtre « deleted_at non nul » double la règle du serveur (politique RLS « effacer »).
+      const r = await this.client.from(table).delete().in('id', ids.slice(i, i + 100)).not('deleted_at', 'is', null).select('id');
+      verifier(r);
+      effaces.push(...((r.data ?? []) as { id: string }[]).map((l) => l.id));
+    }
+    return effaces;
+  }
 }

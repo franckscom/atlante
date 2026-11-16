@@ -125,6 +125,79 @@ async function fusionnerSemences(base: BaseAtlante): Promise<void> {
   });
 }
 
+/**
+ * Corbeille vidée depuis un autre appareil : les lignes ont disparu du serveur.
+ * Ici, elles sont encore dans la corbeille locale. On demande au serveur lesquelles existent toujours
+ * et on efface les autres. Seules des lignes déjà supprimées sont concernées : aucun risque pour les données vivantes.
+ */
+async function retirerCorbeilleVidee(base: BaseAtlante, distant: Distant): Promise<void> {
+  let fichesRetirees = false;
+  for (const table of TABLES) {
+    const t = base.table<Ligne, string>(table);
+    const ids = (await t.filter((l) => !!l.deleted_at && !l._modifie && l.rev > 0).primaryKeys()) as string[];
+    if (!ids.length) continue;
+    const restantes = new Set(await distant.idsExistants(table, ids));
+    const aRetirer = ids.filter((id) => !restantes.has(id));
+    if (!aRetirer.length) continue;
+    await t.bulkDelete(aRetirer);
+    if (table === 'fiches') fichesRetirees = true;
+  }
+  if (fichesRetirees) await retirerOrphelins(base);
+}
+
+/** Efface les relations, affirmations et liens de dossier dont une fiche n'existe plus du tout (comme le fait le serveur). */
+async function retirerOrphelins(base: BaseAtlante): Promise<void> {
+  await base.transaction('rw', base.fiches, base.relations, base.affirmations, base.dossier_fiches, async () => {
+    const fiches = new Set((await base.fiches.toCollection().primaryKeys()) as string[]);
+    await base.relations.filter((r) => !fiches.has(r.source_id) || !fiches.has(r.cible_id)).delete();
+    await base.affirmations.filter((a) => !fiches.has(a.fiche_id)).delete();
+    await base.dossier_fiches.filter((l) => !fiches.has(l.dossier_id) || !fiches.has(l.fiche_id)).delete();
+    // Une affirmation vivante qui citait une fiche effacée perd simplement cette source.
+    await base.affirmations.filter((a) => !!a.source_id && !fiches.has(a.source_id)).modify({ source_id: null });
+  });
+}
+
+/** Nombre d'éléments dans la corbeille, toutes tables confondues. */
+export async function compterCorbeille(base: BaseAtlante): Promise<number> {
+  let n = 0;
+  for (const table of TABLES) n += await base.table<Ligne, string>(table).filter((l) => !!l.deleted_at).count();
+  return n;
+}
+
+export class ErreurCorbeille extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ErreurCorbeille';
+  }
+}
+
+/**
+ * « Vider la corbeille » : efface POUR DE BON tout ce qui est marqué supprimé, sur le serveur puis sur l'appareil.
+ * Les autres appareils s'alignent à leur prochaine synchro (retirerCorbeilleVidee).
+ *
+ * - distant = null : appareil jamais relié à un compte, on n'efface qu'en local.
+ * - sinon : tout doit d'abord être synchronisé. Si une suppression n'était pas encore partie,
+ *   la ligne resterait vivante sur le serveur et sur les autres appareils.
+ */
+export async function viderCorbeille(base: BaseAtlante, distant: Distant | null): Promise<number> {
+  if (distant) {
+    if ((await compterEnAttente(base)) > 0) throw new ErreurCorbeille('Des modifications attendent encore d\'être envoyées. Synchronise, puis recommence.');
+    if ((await base.conflits.count()) > 0) throw new ErreurCorbeille('Des conflits sont à trancher avant de vider la corbeille.');
+  }
+  let total = 0;
+  // Ordre inverse : les lignes qui dépendent d'une fiche avant la fiche elle-même.
+  for (const table of [...TABLES].reverse()) {
+    const t = base.table<Ligne, string>(table);
+    const ids = (await t.filter((l) => !!l.deleted_at).primaryKeys()) as string[];
+    if (!ids.length) continue;
+    if (distant) await distant.effacerDefinitivement(table, ids.filter(Boolean));
+    await t.bulkDelete(ids);
+    total += ids.length;
+  }
+  await retirerOrphelins(base);
+  return total;
+}
+
 /** Après un envoi réussi : enregistre la révision donnée par le serveur. */
 async function confirmerEnvoi(base: BaseAtlante, table: NomTable, envoyee: Ligne, recue: LigneDistante): Promise<void> {
   const t = base.table<Ligne, string>(table);
@@ -174,6 +247,7 @@ export async function synchroniser(base: BaseAtlante, distant: Distant, utilisat
     }
   }
   await fusionnerSemences(base);
+  await retirerCorbeilleVidee(base, distant);
 
   // 2. ENVOYER (les lignes en conflit attendent ma décision)
   for (const table of TABLES) {
@@ -200,8 +274,11 @@ export async function synchroniser(base: BaseAtlante, distant: Distant, utilisat
             bilan.envoyees++;
           } else {
             const distante = await distant.lire(table, locale.id);
-            if (!distante) {
-              // La ligne n'existe plus sur le serveur : on la recrée.
+            if (!distante && locale.deleted_at) {
+              // Supprimée ici, et déjà effacée pour de bon sur le serveur (corbeille vidée ailleurs) : rien à renvoyer.
+              await t.delete(locale.id);
+            } else if (!distante) {
+              // La ligne n'existe plus sur le serveur mais je l'ai modifiée : on la recrée plutôt que de perdre mon travail.
               await confirmerEnvoi(base, table, locale, await distant.inserer(table, donnees));
               bilan.envoyees++;
             } else {

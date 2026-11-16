@@ -7,7 +7,8 @@ import { SUPABASE_TABLEAU_DE_BORD, VERSION_APP } from '../../config';
 import { creer, effacerDonneesLocales, modifier, restaurerFiche, supprimerTypeRelation } from '../../donnees/depot';
 import { TYPES_FICHE, type TypeRelation } from '../../modele/types';
 import { lancerSynchro, useEtatSynchro } from '../../synchro/etat';
-import { compterEnAttente } from '../../synchro/moteur';
+import { DistantSupabase } from '../../synchro/distantSupabase';
+import { compterCorbeille, compterEnAttente, viderCorbeille } from '../../synchro/moteur';
 import { changerMotDePasse, connecter, creerCompte, deconnecter, demanderNouveauMotDePasse, messageErreurCompte, retourLienEmail, supabase, supprimerCompteServeur } from '../../synchro/supabase';
 import { dateLisible } from '../../utils/texte';
 import { confirmer } from '../composants/Confirmation';
@@ -274,12 +275,49 @@ function TypesRelation() {
 }
 
 function Corbeille() {
+  const etat = useEtatSynchro();
   const supprimees = useLiveQuery(async () => (await bd.fiches.filter((f) => !!f.deleted_at).toArray()).sort((a, b) => (b.deleted_at ?? '').localeCompare(a.deleted_at ?? '')), [], []);
+  // La corbeille contient aussi des relations, affirmations, domaines… supprimés.
+  const total = useLiveQuery(() => compterCorbeille(bd), [], 0);
+  const compteConnu = useLiveQuery(() => lireMeta<string | null>(bd, 'utilisateur_id', null), [], null);
+  const [etape, setEtape] = useState(0);
+  const [mot, setMot] = useState('');
+  const [message, setMessage] = useState<Message>(null);
+  const [occupe, setOccupe] = useState(false);
+
+  // Appareil relié à un compte : l'effacement doit aussi se faire sur le serveur, donc connecté et en ligne.
+  const serveurRequis = !!compteConnu || !!etat.utilisateur;
+  const serveurPret = !!etat.utilisateur && etat.enLigne;
+
+  const vider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    setOccupe(true);
+    try {
+      if (serveurRequis) await lancerSynchro(); // les suppressions récentes doivent d'abord atteindre le serveur
+      const n = await viderCorbeille(bd, serveurRequis ? new DistantSupabase(supabase) : null);
+      setEtape(0);
+      setMot('');
+      setMessage({
+        genre: 'ok',
+        texte:
+          `${n} élément${n > 1 ? 's' : ''} effacé${n > 1 ? 's' : ''} définitivement` +
+          (serveurRequis ? ' du serveur et de cet appareil. Tes autres appareils les effaceront à leur prochaine synchro.' : ' de cet appareil.') +
+          ' Tes anciens fichiers de sauvegarde et d\'export les contiennent encore : détruis-les si tu veux un effacement complet.',
+      });
+    } catch (err) {
+      setMessage({ genre: 'danger', texte: 'Corbeille non vidée : ' + (err instanceof Error ? err.message : String(err)) });
+    } finally {
+      setOccupe(false);
+    }
+  };
+
   return (
     <section className="carte">
       <h2>Corbeille</h2>
+      {message && <div className={'bandeau ' + message.genre} role="status">{message.texte}</div>}
       {supprimees.length === 0 ? (
-        <p className="doux">La corbeille est vide.</p>
+        <p className="doux">{total > 0 ? `Aucune fiche, mais ${total} autre${total > 1 ? 's' : ''} élément${total > 1 ? 's' : ''} supprimé${total > 1 ? 's' : ''} (relations, affirmations, domaines…).` : 'La corbeille est vide.'}</p>
       ) : (
         <ul className="liste">
           {supprimees.map((f) => (
@@ -292,7 +330,48 @@ function Corbeille() {
           ))}
         </ul>
       )}
-      <p className="doux petit">Une fiche supprimée reste dans la corbeille : c'est ce qui permet à la suppression d'atteindre tes autres appareils. La restaurer ramène aussi ses relations et ses affirmations.</p>
+      <p className="doux petit">
+        Une fiche supprimée reste dans la corbeille : c'est ce qui permet à la suppression d'atteindre tes autres appareils, et de la restaurer avec ses relations et ses affirmations.
+        Vider la corbeille efface réellement ces données, partout.
+      </p>
+
+      {total > 0 && etape === 0 && (
+        <button className="bouton danger" onClick={() => { setMessage(null); setEtape(1); }}>Vider la corbeille…</button>
+      )}
+      {total > 0 && etape === 1 && (
+        <div className="bandeau danger">
+          <p>
+            <strong>Étape 1 sur 2 : garde une copie si tu en veux une.</strong> {total} élément{total > 1 ? 's' : ''} ({supprimees.length} fiche{supprimees.length > 1 ? 's' : ''}, le reste en relations, affirmations et autres) {total > 1 ? 'seront effacés' : 'sera effacé'} pour de bon
+            {serveurRequis ? ' du serveur et de tous tes appareils' : ' de cet appareil'}. Aucune restauration ne sera possible depuis l'app.
+            La sauvegarde chiffrée et l'export JSON contiennent la corbeille.
+          </p>
+          <div className="actions">
+            <Link className="bouton" to="/sauvegarde">Aller à Sauvegarde et exports</Link>
+            <button className="bouton danger" onClick={() => setEtape(2)}>Continuer sans exporter, ou export déjà fait</button>
+            <button className="bouton" onClick={() => setEtape(0)}>Annuler</button>
+          </div>
+        </div>
+      )}
+      {total > 0 && etape === 2 && (
+        <form className="bandeau danger" onSubmit={vider}>
+          <p><strong>Étape 2 sur 2 : confirmation définitive.</strong></p>
+          <div className="champ">
+            <label htmlFor="v-mot">Écris VIDER en majuscules</label>
+            <input id="v-mot" type="text" value={mot} onChange={(e) => setMot(e.target.value)} autoComplete="off" />
+          </div>
+          {serveurRequis && !serveurPret && (
+            <p className="petit">
+              Il faut être connecté et en ligne : sans cela, les données resteraient sur le serveur et sur tes autres appareils.
+            </p>
+          )}
+          <div className="actions">
+            <button className="bouton danger" type="submit" disabled={mot !== 'VIDER' || occupe || (serveurRequis && !serveurPret)}>
+              {occupe ? 'Effacement…' : 'Vider définitivement la corbeille'}
+            </button>
+            <button className="bouton" type="button" onClick={() => { setEtape(0); setMot(''); }}>Annuler</button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

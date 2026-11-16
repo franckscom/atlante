@@ -8,16 +8,17 @@ Durée totale : 30 à 40 minutes.
 
 Tableau de bord : https://supabase.com/dashboard/project/sixqffwcfapinsdzfbxh
 
-- [ ] **A1. Exécuter la migration SQL.**
+- [ ] **A1. Exécuter les deux migrations SQL, dans l'ordre.**
   1. Sur GitHub, ouvre `supabase/migrations/0001_schema_initial.sql`, clique sur « Raw », sélectionne tout, copie.
   2. Dans Supabase : menu de gauche, « SQL Editor », « New query ».
   3. Colle, clique sur « Run ». Supabase affiche un avertissement sur une opération destructive (à cause des `revoke`) : confirme.
   4. Résultat attendu : « Success. No rows returned ».
-  5. Ne l'exécute qu'une fois. Une seconde exécution échoue sur « relation already exists », sans dégât.
+  5. Recommence les étapes 1 à 4 avec `supabase/migrations/0002_vider_corbeille.sql` (dans une nouvelle requête).
+  6. N'exécute chaque fichier qu'une fois. Une seconde exécution échoue sur « already exists », sans dégât.
 
 - [ ] **A2. Vérifier la RLS.**
   1. « New query », colle le contenu de `supabase/migrations/verification.sql`, « Run ».
-  2. Résultat attendu : 7 lignes, toutes avec `rls_active = true` ; 3 politiques pour chaque table sauf `atlante_migrations` (0).
+  2. Résultat attendu : 7 lignes, toutes avec `rls_active = true` ; 4 politiques pour chaque table sauf `atlante_migrations` (0).
   3. Autre contrôle : menu « Advisors », « Security Advisor » ne doit signaler aucune table sans RLS.
 
 - [ ] **A3. Régler les adresses de retour des e-mails.**
@@ -60,11 +61,12 @@ Ma session ne pouvait pas joindre Supabase (réseau fermé). Le SQL a été test
 
   Résultat attendu : une erreur « permission denied » ou une liste vide `[]`. Jamais tes fiches.
 - [ ] **D6. Sauvegarde et restauration.** « Sauvegarde et exports » : crée la clé de secours, **imprime-la**, fais une sauvegarde. Puis teste la restauration du fichier avec le mot de passe (l'aperçu doit annoncer tout « identique »), et une fois avec la clé de secours.
-- [ ] **D7. Suppression de compte (facultatif, destructif).** À ne tester que si tu acceptes de refaire C1 à C4 : il faut rouvrir les inscriptions pour recréer le compte. Fais une sauvegarde avant.
+- [ ] **D7. Vider la corbeille.** Crée une fiche d'essai, attends « Synchronisé », supprime-la. Sur le second appareil, vérifie qu'elle est dans la corbeille (« Réglages »). Sur le premier : « Réglages », « Vider la corbeille… », les deux étapes. Dans Supabase, « Table Editor », table `fiches` : la ligne a disparu. Sur le second appareil, après « Synchroniser maintenant », la corbeille est vide.
+- [ ] **D8. Suppression de compte (facultatif, destructif).** À ne tester que si tu acceptes de refaire C1 à C4 : il faut rouvrir les inscriptions pour recréer le compte. Fais une sauvegarde avant.
 
 ### Si D1 échoue
 
-- Indicateur « Erreur », détail « permission denied » ou « relation does not exist » : la migration A1 n'a pas été exécutée, ou pas en entier. Refais A1, puis A2.
+- Indicateur « Erreur », détail « permission denied » ou « relation does not exist » : une migration de A1 n'a pas été exécutée, ou pas en entier. Refais A1, puis A2.
 - Détail « schema must be one of… » ou erreur 404 sur `/rest/v1/` : dans Supabase, « Project Settings », « Data API », vérifie que l'API est activée et que le schéma `public` est exposé.
 - « Serveur en pause ou injoignable » alors que le projet est actif : vérifie l'URL du projet dans `src/config.ts`.
 - Dans tous les cas : « Réglages », « Synchronisation », « Détail technique », et envoie-moi le message affiché.

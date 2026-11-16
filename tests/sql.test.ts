@@ -8,7 +8,7 @@ import { nouvelAppareil } from './outils';
 import { COLONNES, TABLES, type NomTable } from '../src/modele/types';
 import { ErreurDistante, type Distant, type LigneDistante } from '../src/synchro/distant';
 import { normaliserDates } from '../src/synchro/distantSupabase';
-import { resoudreConflit, synchroniser } from '../src/synchro/moteur';
+import { resoudreConflit, synchroniser, viderCorbeille } from '../src/synchro/moteur';
 import { creer, fabriquerFiche, modifier, supprimerFiche } from '../src/donnees/depot';
 import { semerSiPremierLancement } from '../src/donnees/db';
 
@@ -61,6 +61,12 @@ class DistantPg implements Distant {
     );
     return r[0] ?? null;
   }
+  async idsExistants(table: NomTable, ids: string[]) {
+    return (await this.q(`select to_jsonb(t) as l from public.${table} t where id = any($1::uuid[])`, [ids])).map((l) => l.id);
+  }
+  async effacerDefinitivement(table: NomTable, ids: string[]) {
+    return (await this.q(`delete from public.${table} t where id = any($1::uuid[]) returning to_jsonb(t) as l`, [ids])).map((l) => l.id);
+  }
 }
 
 beforeAll(async () => {
@@ -76,6 +82,7 @@ beforeAll(async () => {
     insert into auth.users values ('${ALICE}', 'alice@exemple.fr'), ('${BOB}', 'bob@exemple.fr');
   `);
   await pg.exec(readFileSync('supabase/migrations/0001_schema_initial.sql', 'utf8'));
+  await pg.exec(readFileSync('supabase/migrations/0002_vider_corbeille.sql', 'utf8'));
 });
 
 const ficheSql = (id: string, titre: string) => `insert into public.fiches (id, type, titre) values ('${id}', 'note', '${titre}')`;
@@ -118,8 +125,19 @@ describe('migration SQL et RLS', () => {
     await expect(en(ALICE, () => pg.query(`select * from public.atlante_migrations`))).rejects.toThrow(/permission denied/);
   });
 
-  it('pas de suppression physique depuis l\'app, et les listes fermées sont contrôlées', async () => {
-    await expect(en(ALICE, () => pg.exec(`delete from public.fiches`))).rejects.toThrow(/permission denied/);
+  it('suppression physique : seulement mes lignes déjà dans la corbeille ; listes fermées contrôlées', async () => {
+    const vivante = crypto.randomUUID();
+    const jetee = crypto.randomUUID();
+    const jeteeBob = crypto.randomUUID();
+    await en(ALICE, () => pg.exec(`${ficheSql(vivante, 'vivante')}; insert into public.fiches (id, type, deleted_at) values ('${jetee}', 'note', now())`));
+    await en(BOB, () => pg.exec(`insert into public.fiches (id, type, deleted_at) values ('${jeteeBob}', 'note', now())`));
+    // Alice demande à tout effacer, sans filtre : le serveur n'efface que SA ligne déjà supprimée.
+    const effacees = await en(ALICE, () => pg.query<{ id: string }>(`delete from public.fiches returning id`));
+    expect(effacees.rows.map((r) => r.id)).toEqual([jetee]);
+    const restantes = await pg.query<{ id: string }>(`select id from public.fiches where id in ('${vivante}', '${jetee}', '${jeteeBob}')`);
+    expect(restantes.rows.map((r) => r.id).sort()).toEqual([vivante, jeteeBob].sort());
+    await expect(en('anon', () => pg.exec(`delete from public.fiches`))).rejects.toThrow(/permission denied/);
+    await en(BOB, () => pg.exec(`delete from public.fiches where id = '${jeteeBob}'`));
     await expect(en(ALICE, () => pg.exec(`insert into public.fiches (id, type) values ('${crypto.randomUUID()}', 'inconnu')`))).rejects.toThrow(/check constraint/);
   });
 
@@ -180,6 +198,18 @@ describe('moteur de synchro sur le vrai SQL', () => {
     await synchroniser(iphone, serveur, ALICE);
     expect((await iphone.fiches.get(b.id))!.deleted_at).not.toBeNull();
     expect((await iphone.relations.get(rel.id))!.deleted_at).not.toBeNull();
+
+    // Corbeille vidée sur le PC : effacement réel dans PostgreSQL, puis sur l'iPhone.
+    const dansCorbeille = async () => (await pg.query<{ n: number }>(`select count(*)::int as n from public.fiches where owner_id = '${ALICE}' and id = '${b.id}'`)).rows[0].n;
+    expect(await dansCorbeille()).toBe(1);
+    expect(await viderCorbeille(pc, serveur)).toBeGreaterThanOrEqual(4);
+    expect(await dansCorbeille()).toBe(0);
+    expect((await pg.query(`select 1 from public.relations where id = '${rel.id}'`)).rows).toHaveLength(0);
+    expect((await pg.query(`select 1 from public.fiches where id = '${a.id}' and deleted_at is null`)).rows).toHaveLength(1);
+    expect((await synchroniser(iphone, serveur, ALICE)).erreurs).toEqual([]);
+    expect(await iphone.fiches.get(b.id)).toBeUndefined();
+    expect(await iphone.relations.get(rel.id)).toBeUndefined();
+    expect((await iphone.fiches.get(a.id))!.deleted_at).toBeNull();
 
     // Bob, connecté sur son propre appareil, ne reçoit rien d'Alice.
     const appareilBob = nouvelAppareil();

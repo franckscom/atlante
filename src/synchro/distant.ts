@@ -41,4 +41,11 @@ export interface Distant {
    * qu'on détecte un conflit au lieu d'écraser la version de l'autre appareil.
    */
   mettreAJour(table: NomTable, ligne: Record<string, unknown>, revAttendue: number): Promise<LigneDistante | null>;
+  /** Parmi ces identifiants, lesquels existent encore sur le serveur ? */
+  idsExistants(table: NomTable, ids: string[]): Promise<string[]>;
+  /**
+   * Efface pour de bon des lignes DÉJÀ dans la corbeille (le serveur refuse les autres).
+   * Renvoie les identifiants réellement effacés.
+   */
+  effacerDefinitivement(table: NomTable, ids: string[]): Promise<string[]>;
 }

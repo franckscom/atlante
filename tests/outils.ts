@@ -52,4 +52,21 @@ export class FauxServeur implements Distant {
     this.t(table).set(l.id, l);
     return structuredClone(l);
   }
+  async idsExistants(table: NomTable, ids: string[]) {
+    this.verifier();
+    return ids.filter((id) => this.t(table).has(id));
+  }
+  async effacerDefinitivement(table: NomTable, ids: string[]) {
+    this.verifier();
+    const effaces = ids.filter((id) => !!this.t(table).get(id)?.deleted_at);
+    for (const id of effaces) this.t(table).delete(id);
+    if (table === 'fiches') {
+      // Comme le serveur (on delete cascade) : ce qui dépendait d'une fiche effacée disparaît avec elle.
+      const reste = (id: unknown) => this.t('fiches').has(id as string);
+      for (const [id, l] of this.t('relations')) if (!reste(l.source_id) || !reste(l.cible_id)) this.t('relations').delete(id);
+      for (const [id, l] of this.t('affirmations')) if (!reste(l.fiche_id)) this.t('affirmations').delete(id);
+      for (const [id, l] of this.t('dossier_fiches')) if (!reste(l.dossier_id) || !reste(l.fiche_id)) this.t('dossier_fiches').delete(id);
+    }
+    return effaces;
+  }
 }

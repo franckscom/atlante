@@ -58,7 +58,7 @@ L'app écrit d'abord dans une base rangée dans le navigateur, puis recopie les 
 
 **Deux règles posées dans Atlante.**
 - Toutes les écritures passent par `depot.ts`, qui marque la ligne `_modifie = 1`. Sans cette discipline, une modification pourrait ne jamais partir vers le serveur.
-- On ne supprime jamais vraiment : on remplit `deleted_at` (suppression logique). C'est ce qui permet à la suppression d'atteindre les autres appareils, et d'avoir une corbeille.
+- Supprimer, c'est d'abord remplir `deleted_at` (suppression logique). C'est ce qui permet à la suppression d'atteindre les autres appareils, et d'avoir une corbeille. L'effacement réel est une seconde étape, volontaire : « Vider la corbeille » (`viderCorbeille` dans `src/synchro/moteur.ts`).
 
 **Migrations.** `this.version(1).stores({...})` décrit le schéma. Pour le faire évoluer, on ajoute `this.version(2)`, sans toucher à la version 1 : un appareil resté en version 1 saura ainsi se mettre à niveau.
 
@@ -84,7 +84,7 @@ L'app écrit d'abord dans une base rangée dans le navigateur, puis recopie les 
 
 Atlante n'utilise pas la clé secrète, nulle part. Une app qui en a besoin côté navigateur est mal conçue.
 
-**Migrations SQL.** Chaque changement du serveur est un fichier numéroté dans `supabase/migrations/`. On n'édite jamais un fichier déjà exécuté : on en ajoute un. Exemple, pour ajouter un type de fiche « Lieu » : un fichier `0002_type_lieu.sql` qui remplace la contrainte `check` de la colonne `type`, plus l'ajout de `lieu` dans `src/modele/types.ts`. Le serveur d'abord, l'app ensuite.
+**Migrations SQL.** Chaque changement du serveur est un fichier numéroté dans `supabase/migrations/`. On n'édite jamais un fichier déjà exécuté : on en ajoute un. Exemple réel : `0002_vider_corbeille.sql` ajoute le droit d'effacer, sans toucher à la 0001. Autre exemple, pour ajouter un type de fiche « Lieu » : un fichier `0002_type_lieu.sql` qui remplace la contrainte `check` de la colonne `type`, plus l'ajout de `lieu` dans `src/modele/types.ts`. Le serveur d'abord, l'app ensuite.
 
 **Question 5.** Un prestataire te propose de « simplifier » en mettant la clé service_role dans l'app pour éviter d'écrire des politiques RLS. Que réponds-tu ?
 
@@ -112,10 +112,11 @@ Atlante n'utilise pas la clé secrète, nulle part. Une app qui en a besoin côt
 
 **Dans le code.** Section 3 de `0001_schema_initial.sql`. Les tests de `tests/sql.test.ts` jouent Alice et Bob : Bob essaie de lire, de modifier et de s'attribuer les fiches d'Alice, et échoue à chaque fois.
 
-**Trois protections empilées dans Atlante.**
+**Quatre protections empilées dans Atlante.**
 1. `revoke all … from anon` : un visiteur non connecté n'a aucun droit sur les tables.
 2. Les politiques RLS : un utilisateur connecté ne voit que ses lignes.
 3. Un déclencheur empêche de changer le propriétaire d'une ligne après coup.
+4. La politique « effacer » n'autorise la suppression physique que pour une ligne déjà dans la corbeille (`deleted_at` rempli). Même une app boguée ne peut pas détruire directement une fiche vivante.
 
 **Réflexe à garder.** Une table créée sans `enable row level security` est ouverte. Après chaque migration, exécuter `supabase/migrations/verification.sql`.
 
@@ -183,9 +184,9 @@ Atlante n'utilise pas la clé secrète, nulle part. Une app qui en a besoin côt
 **Pourquoi ce choix.** La synchro et la sauvegarde sont des mécanismes où une erreur détruit des données sans prévenir. On ne peut pas les vérifier « à l'œil ». Vitest est l'outil de test qui va avec Vite.
 
 **Trois niveaux dans Atlante.**
-1. **Tests de logique** (`tests/`, 51 tests, 3 secondes) : modèle, doublons, recherche, synchro avec deux appareils simulés, chiffrement, restauration, exports.
+1. **Tests de logique** (`tests/`, 57 tests, 3 secondes) : modèle, doublons, recherche, synchro avec deux appareils simulés, vidage de la corbeille, chiffrement, restauration, exports.
 2. **Tests du SQL** (`tests/sql.test.ts`) : la migration est exécutée dans un vrai PostgreSQL embarqué (PGlite), avec deux utilisateurs, pour vérifier que la RLS tient.
-3. **Parcours dans un vrai navigateur** (`tests-navigateur/parcours.cjs`, 34 vérifications) : Playwright pilote Chromium comme le ferait un utilisateur, y compris hors ligne et avec un serveur « en pause ».
+3. **Parcours dans un vrai navigateur** (`tests-navigateur/parcours.cjs`, 38 vérifications) : Playwright pilote Chromium comme le ferait un utilisateur, y compris hors ligne et avec un serveur « en pause ».
 
 **Ce que les tests ne prouvent pas.** Ils tournent contre un faux Supabase et un PostgreSQL embarqué, pas contre ton vrai projet, ni sur un vrai iPhone. D'où la partie D et E de ACTIONS_MANUELLES.md. Savoir dire ce qu'un test ne couvre pas fait partie du métier.
 
@@ -200,7 +201,7 @@ Atlante n'utilise pas la clé secrète, nulle part. Une app qui en a besoin côt
 1. La liste vient de `useDonnees()`, branché sur `useLiveQuery` : Dexie signale chaque changement de la base et React redessine. L'écran reflète la base, on ne le met jamais à jour à la main.
 2. GitHub Pages sert l'app dans le sous-dossier `/atlante/`. Sans `base`, la page chercherait ses fichiers à la racine du site, ne les trouverait pas, et resterait blanche.
 3. Non. Le service worker sert d'abord la version en cache, puis découvre la nouvelle en arrière-plan. L'app affiche alors « Une nouvelle version est prête » : un clic sur « Mettre à jour ».
-4. Pour que la suppression se propage. Si la ligne disparaissait, l'autre appareil, qui l'a encore, la renverrait au serveur à la synchro suivante et la fiche ressusciterait. La date dans `deleted_at` est une information comme une autre, qui se synchronise.
+4. Pour que la suppression se propage. Si la ligne disparaissait, l'autre appareil, qui l'a encore, la renverrait au serveur à la synchro suivante et la fiche ressusciterait. La date dans `deleted_at` est une information comme une autre, qui se synchronise. Quand la corbeille est vidée, la ligne disparaît du serveur ; chaque autre appareil demande alors « mes lignes supprimées existent-elles encore ? » et efface celles qui n'existent plus.
 5. Non. Cette clé passe outre toutes les protections, et tout ce qui est dans une app est lisible par ses utilisateurs : ce serait donner la base entière à n'importe qui. Les politiques RLS ne sont pas une formalité, elles sont la sécurité.
 6. La RLS (brique 7) et la fermeture des inscriptions. Sans compte, aucun droit sur les tables. Avec un compte qui ne serait pas le tien, uniquement ses propres lignes.
 7. Toute personne connectée (ou même anonyme, selon les droits accordés) peut lire et modifier les brouillons de tous. L'app ne montre rien d'anormal parce qu'elle ne demande que les siens. On le voit avec `verification.sql`, avec le « Security Advisor » de Supabase, ou avec un test à deux utilisateurs.

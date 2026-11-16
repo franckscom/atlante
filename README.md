@@ -51,7 +51,7 @@ Fichiers servis par GitHub Pages (aucun serveur à moi). Mise en cache par un se
 | `src/sauvegarde/` | Chiffrement (Web Crypto), sauvegarde, restauration |
 | `src/exports/`, `src/ia/` | Markdown, CSV, ZIP, « Préparer pour Claude » |
 | `src/ui/` | Écrans et composants React |
-| `supabase/migrations/` | SQL du serveur : tables, RLS, suppression de compte |
+| `supabase/migrations/` | SQL du serveur : tables, RLS, suppression de compte, vidage de la corbeille |
 | `tests/` | Tests automatiques (Vitest) |
 | `tests-navigateur/` | Parcours complet dans un vrai navigateur (Playwright) |
 | `.github/workflows/` | Tests et déploiement automatiques |
@@ -148,7 +148,8 @@ Cas : projet Supabase perdu, ou nouvelle installation complète.
 - **Synchro uniquement quand l'app est ouverte.** Pas de synchro en arrière-plan (impossible sur iPhone).
 - **iPhone (Safari).** Voir le tableau ci-dessous.
 - **Base locale non chiffrée** (hors périmètre V1) : qui a accès à ta session sur l'appareil a accès aux données. La clé de secours y est aussi enregistrée, pour pouvoir chiffrer chaque sauvegarde sans la redemander.
-- **Corbeille jamais vidée.** Les lignes supprimées restent marquées, c'est ce qui propage la suppression. Seule la suppression du compte les détruit.
+- **Corbeille vidée à la main.** Une suppression envoie à la corbeille (c'est ce qui la propage aux autres appareils). « Réglages », « Vider la corbeille » efface réellement ces données du serveur, de l'appareil, puis des autres appareils à leur synchro suivante. Les anciens fichiers de sauvegarde et d'export les contiennent encore : à détruire soi-même. Restaurer une ancienne sauvegarde les ramènerait dans la corbeille.
+- **Fiche effacée ici, modifiée hors ligne ailleurs.** Si un autre appareil avait modifié la fiche sans avoir synchronisé, il la recrée à sa synchro suivante : l'app préfère faire réapparaître une fiche que perdre un travail en silence.
 - **Images distantes non affichées** dans les contenus Markdown (aucune requête vers un tiers à la lecture).
 - **Listes fermées côté serveur.** Ajouter un type de fiche ou un statut demande une migration SQL (voir LECONS.md).
 - **Pas de** : PDF, OCR, recherche sémantique, graphe, réimport des réponses de Claude, pont avec Regia (hors périmètre, SPEC section 15).

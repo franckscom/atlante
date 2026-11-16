@@ -34,7 +34,7 @@ Si le client crée lui-même son projet Supabase et son dépôt, et que tu ne fa
 | Destinataires | L'utilisateur seul. Personne d'autre n'a accès aux données par l'app (RLS). |
 | Sous-traitants | Supabase (base de données, authentification, e-mails de compte). GitHub Pages (diffusion des fichiers de l'app ; ne reçoit aucune donnée de contenu). Voir section 4. |
 | Transferts hors UE | Données stockées à Paris (AWS eu-west-3). Accès possible depuis les États-Unis par Supabase pour l'assistance et l'exploitation, encadré par les clauses contractuelles types. Voir section 5. |
-| Durée de conservation | Tant que le compte existe. Suppression immédiate et définitive sur le serveur par « Supprimer mon compte ». Les journaux techniques suivent les durées de Supabase et de GitHub. Pour une PME : fixer une durée après le départ d'un salarié (par exemple, suppression du compte dans les 30 jours). |
+| Durée de conservation | Tant que l'utilisateur les garde. Une fiche supprimée va à la corbeille ; « Vider la corbeille » l'efface réellement du serveur et des appareils, sans toucher au compte. « Supprimer mon compte » efface tout, immédiatement. Les journaux techniques suivent les durées de Supabase et de GitHub. Pour une PME : fixer une durée après le départ d'un salarié (par exemple, suppression du compte dans les 30 jours). |
 | Mesures de sécurité | Section 6. |
 | Exercice des droits | Section 7. |
 
@@ -44,6 +44,7 @@ Si le client crée lui-même son projet Supabase et son dépôt, et que tu ne fa
 - Aucune police ni script chargé depuis un tiers (pas de Google Fonts, pas de CDN) : ouvrir l'app ne contacte que GitHub Pages et Supabase.
 - Aucune image distante affichée dans les fiches : lire une fiche n'envoie aucune requête à un site tiers.
 - Pas de nom, pas de téléphone, pas de profil : le compte se limite à une adresse e-mail et un mot de passe.
+- Une donnée supprimée ne reste pas indéfiniment : la corbeille se vide réellement, sans supprimer le compte.
 - « Préparer pour Claude » n'envoie rien : l'app copie un texte, c'est l'utilisateur qui le colle où il veut. S'il le colle dans un service d'IA, c'est un nouveau traitement, sous sa responsabilité (pour une PME : à encadrer par une consigne).
 
 La session de connexion est gardée dans le stockage local du navigateur, pas dans un cookie. Elle est strictement nécessaire au service demandé : pas de bandeau de consentement à prévoir (exemption prévue par l'article 82 de la loi Informatique et Libertés ; voir les lignes directrices de la CNIL sur les traceurs).
@@ -91,6 +92,7 @@ Pour un client attentif à la souveraineté : les mêmes fichiers peuvent être 
 | Sauvegardes chiffrées (AES-GCM 256 bits, clé tirée du mot de passe par PBKDF2) | `src/sauvegarde/chiffrement.ts` |
 | Contenu importé nettoyé avant affichage (pas d'exécution de script) | `src/ui/composants/Markdown.tsx` |
 | Pas de suppression silencieuse : conflits montrés, corbeille, confirmations | `src/synchro/moteur.ts`, écran « Conflits » |
+| Effacement physique limité aux lignes déjà supprimées et à leur propriétaire | `supabase/migrations/0002_vider_corbeille.sql`, testé dans `tests/sql.test.ts` |
 | Dépendances limitées, sous licence libre, versions verrouillées | `package-lock.json` |
 
 Points faibles à connaître : la base locale n'est pas chiffrée (protection = verrouillage de session de l'appareil) ; un seul facteur d'authentification (pour une PME, activer la double authentification de Supabase Auth) ; les exports Markdown, JSON et CSV sont en clair.
@@ -102,7 +104,8 @@ Points faibles à connaître : la base locale n'est pas chiffrée (protection = 
 | Accès (article 15) | Tout est visible dans l'app. Export JSON complet. |
 | Portabilité (article 20) | Exports JSON (lisible par une machine), CSV et Markdown. |
 | Rectification (article 16) | Chaque fiche, champ et relation est modifiable. |
-| Effacement (article 17) | « Réglages », « Supprimer mon compte et toutes mes données » : double confirmation, export proposé avant, suppression du compte et de toutes les lignes sur le serveur, effacement de l'appareil. À compléter à la main : effacer les autres appareils et détruire les fichiers de sauvegarde. |
+| Effacement d'une donnée précise (article 17) | Supprimer la fiche, puis « Réglages », « Vider la corbeille » : double confirmation, export proposé avant, effacement réel sur le serveur, sur l'appareil, puis sur les autres appareils à leur synchro suivante. Le serveur n'accepte d'effacer que des lignes déjà dans la corbeille. À compléter à la main : détruire les anciens fichiers de sauvegarde et d'export. |
+| Effacement de tout (article 17) | « Réglages », « Supprimer mon compte et toutes mes données » : double confirmation, export proposé avant, suppression du compte et de toutes les lignes sur le serveur, effacement de l'appareil. À compléter à la main : effacer les autres appareils et détruire les fichiers de sauvegarde. |
 | Personnes citées dans les fiches | Elles n'ont pas de compte. Une demande passerait par le responsable de traitement, qui chercherait leur nom (recherche plein texte) puis corrigerait ou supprimerait les fiches. |
 
 En cas de violation de données (compte piraté, fuite chez un sous-traitant) : pour une PME, notification à la CNIL sous 72 heures si un risque existe pour les personnes (article 33), et tenue d'un registre des incidents.

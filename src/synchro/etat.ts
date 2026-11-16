@@ -58,14 +58,22 @@ export const MESSAGE_INJOIGNABLE = 'Synchro impossible : serveur en pause ou inj
 
 let enCours = false;
 let redemander = false;
+let passageEnCours: Promise<void> = Promise.resolve();
 
 /** Lance une synchronisation (bouton « Synchroniser maintenant » et déclenchements automatiques). */
-export async function lancerSynchro(): Promise<void> {
-  if (!etat.utilisateur || !etat.enLigne) return;
+export function lancerSynchro(): Promise<void> {
+  if (!etat.utilisateur || !etat.enLigne) return Promise.resolve();
   if (enCours) {
+    // Une synchro tourne déjà : on en demande une autre juste après, et on attend la fin de celle en cours.
     redemander = true;
-    return;
+    return passageEnCours;
   }
+  passageEnCours = unPassage();
+  return passageEnCours;
+}
+
+async function unPassage(): Promise<void> {
+  if (!etat.utilisateur) return;
   enCours = true;
   maj({ phase: 'en_cours', message: '' });
   try {
